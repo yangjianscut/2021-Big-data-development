@@ -32,7 +32,7 @@ public class FileSync {
                     if(event.kind().equals(StandardWatchEventKinds.ENTRY_CREATE)){
                         if(!Monitor.contains(path+event.context())) {
                             Monitor.add(path+event.context());
-                            System.out.println("创建了文件 "+event.context()+" ,开始同步上传");
+                            System.out.println("create file "+event.context()+" ,start to sync");
                             FutureTask<Boolean> task = new FutureTask<>(new Callable<Boolean>() {
                                 @Override
                                 public Boolean call() {
@@ -42,7 +42,7 @@ public class FileSync {
                             threadPool.execute(task);
                         }
                     }else if(event.kind().equals(StandardWatchEventKinds.ENTRY_DELETE)){
-                        System.out.println("删除了文件 "+event.context()+" ,开始同步删除");
+                        System.out.println("delete file "+event.context()+" ,start remote sync");
                         FutureTask<Boolean> task=new FutureTask<>(new Callable<Boolean>() {
                             @Override
                             public Boolean call() {
@@ -53,7 +53,7 @@ public class FileSync {
                     }else if(event.kind().equals(StandardWatchEventKinds.ENTRY_MODIFY)){
                         if(!Monitor.contains(path+event.context())) {
                             Monitor.add(path+event.context());
-                            System.out.println("修改了文件 " + event.context() + " ,开始同步更新");
+                            System.out.println("modify file " + event.context() + " ,start remote sync");
                             FutureTask<Boolean> task = new FutureTask<>(new Callable<Boolean>() {
                                 @Override
                                 public Boolean call() {

@@ -33,21 +33,22 @@ public class S3tools {
             .withPathStyleAccessEnabled(true)
             .build();
 
-    public static Boolean Upload(String filePath){
-        String keyName = Paths.get(filePath).getFileName().toString();
-        File file = new File(filePath);
+    public static Boolean Upload(String filePath) {
+        final String keyName = Paths.get(filePath).getFileName().toString();
+        final File file = new File(filePath);
         if(file.isDirectory()){
-            System.out.println("create New directory "+keyName);
+            System.out.println("create file"+keyName+" ,start to upload");
             ObjectMetadata Metadata=new ObjectMetadata();
             Metadata.setContentLength(0);
             InputStream empty=new ByteArrayInputStream(new byte[0]);
             PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName,keyName+"/",empty,Metadata);
             s3.putObject(putObjectRequest );
+            System.out.println("already in s3 "+bucketName+" create dict "+keyName);
             return true;
         }
-        // Create a list of UploadPartResponse objects. You get one of these
-        // for each part upload.
+        System.out.println("start to S3 " + bucketName + " upload file " + keyName);
         if(file.length() > 20 << 20) {
+            long partSize = 5 << 20;
             ArrayList<PartETag> partETags = new ArrayList<PartETag>();
             long contentLength = file.length();
             String uploadId = null;
@@ -74,66 +75,77 @@ public class S3tools {
                             .withFile(file)
                             .withPartSize(partSize);
 
-                    // Upload part and add response to our list.
                     System.out.format("Uploading part %d\n", i);
                     partETags.add(s3.uploadPart(uploadRequest).getPartETag());
-
                     filePosition += partSize;
                 }
 
-                // Step 3: Complete.
                 System.out.println("Completing upload");
                 CompleteMultipartUploadRequest compRequest =
                         new CompleteMultipartUploadRequest(bucketName, keyName, uploadId, partETags);
 
                 s3.completeMultipartUpload(compRequest);
+
             } catch (Exception e) {
                 System.err.println(e.toString());
                 if (uploadId != null && !uploadId.isEmpty()) {
-                    // Cancel when error occurred
                     System.out.println("Aborting upload");
                     s3.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName, keyName, uploadId));
                 }
                 System.exit(1);
+            }
+            System.out.println("Done!");
+        }else {
+            try {
+                s3.putObject(bucketName, keyName, file);
+
+            } catch (AmazonServiceException e) {
+                if (e.getErrorCode().equalsIgnoreCase("cannot find bucket " + bucketName)) {
+                    s3.createBucket(bucketName);
+                }
+
+                System.err.println(e.toString());
+                System.exit(1);
+            } catch (AmazonClientException e) {
+                try {
+                    s3.getBucketAcl(bucketName);
+                } catch (AmazonServiceException ase) {
+                    if (ase.getErrorCode().equalsIgnoreCase("cannot find bucket " + bucketName)) {
+                        s3.createBucket(bucketName);
+                    }
+                } catch (Exception ignore) {
+                }
+
+                System.err.println(e.toString());
+                System.exit(1);
                 return false;
             }
-            System.out.println("Done!");
-            return true;
-        }else{
-            System.out.format("Uploading %s to S3 bucket %s...\n", filePath, bucketName);
-            for (int i = 0; i < 2; i++) {
-                try {
-                    s3.putObject(bucketName, keyName, file);
-                    break;
-                } catch (AmazonServiceException e) {
-                    if (e.getErrorCode().equalsIgnoreCase("NoSuchBucket")) {
-                        s3.createBucket(bucketName);
-                        continue;
-                    }
-
-                    System.err.println(e.toString());
-                    System.exit(1);
-                    return false;
-                } catch (AmazonClientException e) {
-                    try {
-                        // detect bucket whether exists
-                        s3.getBucketAcl(bucketName);
-                    } catch (AmazonServiceException ase) {
-                        if (ase.getErrorCode().equalsIgnoreCase("NoSuchBucket")) {
-                            s3.createBucket(bucketName);
-                            continue;
-                        }
-                    } catch (Exception ignore) {
-                    }
-
-                    System.err.println(e.toString());
-                    System.exit(1);
-                    return false;
-                }
-            }
-            System.out.println("Done!");
-            return true;
+            System.out.println("Upload file to S3 " + bucketName  + keyName + " finished ");
         }
+        return true;
+    }
+
+    public static Boolean DeleteFile(String filePath) {
+        final String keyName = Paths.get(filePath).getFileName().toString();
+        System.out.println("begin delete S3 file "+bucketName+"/ "+keyName);
+        try {
+            s3.deleteObject(bucketName, keyName);
+        } catch (AmazonServiceException e) {
+            try {
+                // detect bucket whether exists
+                s3.getBucketAcl(bucketName);
+            } catch (AmazonServiceException ase) {
+                if (ase.getErrorCode().equalsIgnoreCase("cannot find bucket "+bucketName)) {
+                    s3.createBucket(bucketName);
+                }
+            } catch (Exception ignore) {
+            }
+            System.err.println(e.toString());
+            System.exit(1);
+            return false;
+        }
+        System.out.println("From S3 "+bucketName+" delete file "+keyName+" finished");
+        return true;
     }
 
     public static Boolean Download(String filePath){
